@@ -55,7 +55,7 @@ public class Resolver {
     }
 
     // Search for answer
-    Response res = new Response(null);
+    Response res = new Response();
     for (i = 0; i < rootResponses.length; i++) {
        Response rootRes = rootResponses[i];
       if (rootRes != null && rootRes.getA().size() > 0) {
@@ -66,50 +66,43 @@ public class Resolver {
 
     System.out.println("we got to res " + res.getDest());
     System.out.println("Answer is: " + res.getA());
-        System.out.println("Size is: " + res.getA().size());
-
-    // System.out.println(res.getA().get(12));
-    // queryDnsServer(clientDatagram, res.getA().get(0));
-    // queryDnsServer(clientDatagram, res.getA().get(1));
-    // queryDnsServer(clientDatagram, res.getA().get(2));
-    // queryDnsServer(clientDatagram, res.getA().get(3));
-    // System.out.println(clientDatagram.getPacketBytes().length);
-    for (i = 0; i < res.getA().size(); i++) {
-      res = queryDnsServer(clientDatagram, res.getA().get(i));
-      if (res != null) {
-        break;
-      }
-    }
 
     ////////////////////////////////////////////////////////////////////////////
     ///////////////////////// PROBLEM HERE ///////////////////////////
     ////////////////// why doesn't size of res carry between methods? //////////////////////
     ////////////////////////////////////////////////////////////////////////////
+        // System.out.println("Size is: " + res.getA().size());
 
     finalResponse = getAnsRec(clientDatagram, res);
-
     System.out.println(finalResponse.getA());
 
   }
   
   public static Response getAnsRec(Datagram clientDatagram, Response res) throws IOException {
-            System.out.println("Size is: " + res.getA().size());
-
     Response currRes = res;
     for (int i = 0; i < res.getA().size(); i++) {
       currRes = queryDnsServer(clientDatagram, res.getA().get(i));
-      System.out.println(currRes.getA().size());
-      if (currRes.getAnswer() == true) { 
-        return currRes;
-      } else if (currRes.getA().size() > 0) {
-        return getAnsRec(clientDatagram, currRes);
+      if (currRes != null) {
+        System.out.println("IP: " + res.getA().get(i) + "size = " + currRes.getA().size() + "\n");
+        if (currRes.getAnswer() == true) { 
+          return currRes;
+        } else if (currRes.getA().size() > 0) {
+          return getAnsRec(clientDatagram, currRes);
+        }
       }
+      
     }
     return res;
   }
   
   public static Response queryDnsServer(Datagram clientDatagram, String destIp) throws IOException {
-      InetAddress dnsAddr = InetAddress.getByName(destIp);
+      InetAddress dnsAddr;
+      try {
+        dnsAddr = InetAddress.getByName(destIp);
+      } catch (UnknownHostException e) {
+        System.out.println("Could not find host: " + e);
+        return null;
+      }
 
       // Create new socket to connect to DNS servers
       DatagramSocket dnsSocket = new DatagramSocket();
@@ -141,10 +134,9 @@ public class Resolver {
       }
 
       // Get responses from datagram
-      Response res = new Response(dnsAddr);
-      res = readResPacket(dnsDatagram);
+      System.out.println("dnsResPacket" + dnsResPacket.getAddress().toString());
+      Response res = readResPacket(dnsDatagram);
 
-      System.out.println("Received: " + dnsResPacket.getAddress() + " " + dnsResPacket.getLength() + " bytes");
       dnsSocket.close();
 
     return res;
@@ -155,8 +147,9 @@ public class Resolver {
 
     // Code from https://levelup.gitconnected.com/dns-response-in-java-a6298e3cc7d9 start
     // Reads the DNS response
-    System.out.println("\n\nStart response decode");
-        System.out.println("Transaction ID: " + dataInputStream.readShort()); // ID
+    // System.out.println("\n\nStart response decode");
+        short Id = dataInputStream.readShort(); // ID
+        // System.out.println("Transaction ID: " + dataInputStream.readShort()); // ID
         short flags = dataInputStream.readByte();
         int QR = (flags & 0b10000000) >>> 7;
         int opCode = ( flags & 0b01111000) >>> 3;
@@ -182,9 +175,9 @@ public class Resolver {
         short ARCOUNT = dataInputStream.readShort();
 
         // System.out.println("Questions: " + String.format("%s",QDCOUNT ));
-        // System.out.println("Answers RRs: " + String.format("%s", ANCOUNT));
-        // System.out.println("Authority RRs: " + String.format("%s", NSCOUNT));
-        // System.out.println("Additional RRs: " + String.format("%s", ARCOUNT));
+        System.out.println("Answers RRs: " + String.format("%s", ANCOUNT));
+        System.out.println("Authority RRs: " + String.format("%s", NSCOUNT));
+        System.out.println("Additional RRs: " + String.format("%s", ARCOUNT));
 
         String QNAME = "";
         int recLen;
@@ -206,8 +199,7 @@ public class Resolver {
         byte firstBytes = dataInputStream.readByte();
         int firstTwoBits = (firstBytes & 0b11000000) >>> 6;
 
-        Response res = new Response(datagram.getDatagramPacket().getAddress());
-
+        Response res = new Response(datagram.getDatagramPacket().getAddress().toString());
         for (int i = 0; i < NSCOUNT + ANCOUNT + ARCOUNT; i++) {
           if (firstTwoBits == 3) {
             dataInputStream.readByte();
@@ -254,7 +246,7 @@ public class Resolver {
           }
         }
       // Code from https://levelup.gitconnected.com/dns-response-in-java-a6298e3cc7d9 end
-
+        System.out.println("res A size: " + res.getA().size());
         return res;
       ////// Create a class that holds the type and the response
       // that way you know how to read the response (either as an IPV4 for A or a name server name for NS)

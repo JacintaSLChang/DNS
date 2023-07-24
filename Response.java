@@ -4,13 +4,20 @@ import java.util.ArrayList;
 public class Response {
   private ArrayList<String> NS;
   private ArrayList<String> A;
-  private InetAddress dest;
+  private String dest;
   private Boolean answer;
 
-  public Response(InetAddress dest) {
+  public Response(String dest) {
     NS = new ArrayList<>();
     A = new ArrayList<>();
     this.dest = dest;
+    answer = false;
+  }
+
+  public Response() {
+    NS = new ArrayList<>();
+    A = new ArrayList<>();
+    this.dest = null;
     answer = false;
   }
 
@@ -34,7 +41,7 @@ public class Response {
     return A;
   }
 
-  public InetAddress getDest() {
+  public String getDest() {
     return dest;
   }
 

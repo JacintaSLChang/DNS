@@ -2,6 +2,7 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class Response {
   private int id = 0;
@@ -15,12 +16,20 @@ public class Response {
   private int ARCOUNT = 0;
   private Datagram datagram = null;
 
+  private static final int A = 1;
+  private static final int NS = 2;
+  private static final int CNAME = 5;
+  private static final int PTR = 12;
+  private static final int MX = 15;
+
   public Response() {
   }
 
-
-  private ArrayList<String> NS = new ArrayList<>();
-  private ArrayList<String> A = new ArrayList<>();
+  private ArrayList<String> nsList = new ArrayList<>();
+  private ArrayList<String> aList = new ArrayList<>();
+  private ArrayList<String> cnameList = new ArrayList<>();
+  private ArrayList<String> mxList = new ArrayList<>();
+  private ArrayList<String> ptrList = new ArrayList<>();
 
   public int getId() {
     return id;
@@ -39,19 +48,43 @@ public class Response {
   }
 
   public ArrayList<String> getNS() {
-    return NS;
+    return nsList;
   }
 
   public void addNS(String nS) {
-    NS.add(nS);
+    nsList.add(nS);
   }
 
   public ArrayList<String> getA() {
-    return A;
+    return aList;
   }
 
   public void addA(String a) {
-    A.add(a);
+    aList.add(a);
+  }
+
+  public ArrayList<String> getCNAME() {
+    return cnameList;
+  }
+
+  public void addCNAME(String cname) {
+    cnameList.add(cname);
+  }
+
+    public ArrayList<String> getMX() {
+    return mxList;
+  }
+
+  public void addMX(String mx) {
+    mxList.add(mx);
+  }
+
+  public ArrayList<String> getPTR() {
+    return ptrList;
+  }
+
+  public void addPTR(String ptr) {
+    ptrList.add(ptr);
   }
 
   public Boolean getAnswer() {
@@ -188,7 +221,20 @@ public class Response {
         ArrayList<Integer> RDATA = new ArrayList<>();        
         for(int s = 0; s < RDLENGTH; s++) {
             int nx = dataInputStream.readByte() & 0xff;
-            RDATA.add(nx);
+            // RDATA.add(nx);
+            // check offset
+            if ((TYPE == NS || TYPE == CNAME) && nx == 0xc0) {
+              int offset = dataInputStream.readByte() & 0xff;
+              s = RDLENGTH;
+              byte[] label = Arrays.copyOfRange(datagram.getPacketBytes(), offset, datagram.getPacketBytes().length - 1);
+              for (int curr = 0; label[curr] != 0; curr++) {
+                int letter = label[curr] & 0xff;
+                if (letter < 33 || letter > 127) { letter = 0x2e; }
+                RDATA.add(letter);
+              }
+            } else {
+              RDATA.add(nx);
+            }
         }
 
         firstBytes = dataInputStream.readByte();
@@ -198,22 +244,41 @@ public class Response {
         //  it in Response
         StringBuilder ip = new StringBuilder();
         String string = "";
-          switch (TYPE) {
-            case 1: // A record
-              for(Integer ipPart:RDATA) {
-                  ip.append(ipPart).append(".");
-              }
-              string = ip.toString();
-              string = string.substring(0, string.length() - 1);
-              addA(string);
-              break;
-            case 2: // NS record
-              for(Integer ipPart:RDATA) {
-                  ip.append(Character.toChars(ipPart));
-              }
-              string = ip.toString();
-              addNS(string);
-          }
+        switch(TYPE) {
+          case A:
+            for(Integer ipPart:RDATA) {
+                ip.append(ipPart).append(".");
+            }
+            string = ip.toString();
+            string = string.substring(0, string.length() - 1);
+            addA(string);
+            break;
+          case NS:
+            for(Integer ipPart:RDATA) {
+              ip.append(Character.toChars(ipPart));
+            }
+            string = ip.toString(); 
+            addNS(string);
+            break;
+          case CNAME:
+            for(Integer ipPart:RDATA) {
+              ip.append(Character.toChars(ipPart));
+            }
+            string = ip.toString(); 
+            addCNAME(string);
+          case MX:
+            for(Integer ipPart:RDATA) {
+              ip.append(Character.toChars(ipPart));
+            }
+            string = ip.toString();             
+            addMX(string);
+          case PTR:
+            for(Integer ipPart:RDATA) {
+              ip.append(Character.toChars(ipPart));
+            }
+            string = ip.toString();             
+            addPTR(string);
+        }    
       }
     }
     /*

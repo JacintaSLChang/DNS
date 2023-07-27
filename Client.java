@@ -1,30 +1,42 @@
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
-import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Random;
-
-import javax.xml.crypto.Data;
 
 public class Client {
   private static DatagramSocket clientSocket;
+  private static int enhancement = 0;
+
+  private static final int INVALID = -1;
+  private static final int TIMEOUT = 0;
+  private static final int A = 1;
+  private static final int NS = 2;
+  private static final int CNAME = 5;
+  private static final int PTR = 12;
+  private static final int MX = 15;
+
   public static void main(String[] args) throws Exception {
-    if (checkArguments(args)) {
+    if ((enhancement = checkArguments(args)) == INVALID) {
       return;
     }
+          System.out.println(enhancement);
+
 
     InetAddress IPAddress = InetAddress.getByName(args[0]);
     int serverPort = Integer.parseInt(args[1]);
     String domain = args[2];
-    int timeout = (args.length > 3 ? Integer.parseInt((args[3])) : 5);
+
+    int timeout = 5;
+    if (enhancement == TIMEOUT) {
+      timeout = (args.length > 3 ? Integer.parseInt((args[3])) : 5);
+    }
     System.out.println("Timeout is: " + timeout + "ms");
 
     clientSocket = new DatagramSocket();
@@ -45,41 +57,67 @@ public class Client {
   /*
    * Checks if arguments are valid
    * Arguments:     String[]    args     string of arguments given to command line
-   * Return:        Boolean              true if invalid
+   * Return:        int                  -1 for invalid
+   *                                     0 timeout
+   *                                     1 for no extra argument or A
+   *                                     2 for NS
+   *                                     5 for CNAME
+   *                                     12 for PTR
+   *                                     15 for MX
    */
-  public static Boolean checkArguments(String[] args) {
+  public static int checkArguments(String[] args) {
     // client resolver_ip resolver_port name timeout
     if (args.length < 3 || args.length > 4) {
       System.out.println("Error: too many/few arguments\n" + 
       "Usage: client resolver_ip resolver_port name timeout");
-      return true;
+      return INVALID;
     }
 
     try {
-      int port = Integer.parseInt(args[3]);
+      int port = Integer.parseInt(args[1]);
       if (port < 1024 || port == 8080) {
         System.out.println("Error: invalid arguments\n" + 
-        "Invalid port number");
-        return true;
+        "Invalid port number, must be > 1024 and not 8080");
+        return INVALID;
       }
     } catch (NumberFormatException e) {
       System.out.println("Error: invalid arguments\n" + 
-        "Invalid port number");
-      return true;
+        "Invalid port number, must be an integer");
+      return INVALID;
     }
 
     if (args.length == 4) {
+      // Check if advanced record
+      String advanced = args[3].toUpperCase();
+      switch (advanced) {
+        case "A":
+          return A;
+        case "NS":
+          return NS;
+        case "CNAME":
+          return CNAME;
+        case "PTR":
+          return PTR;
+        case "MX":
+          return MX;
+      }
+
+      // Check if timeout
       try {
         Integer.parseInt(args[3]);
       }
       catch (NumberFormatException e) {
         System.out.println("Error: invalid arguments\n" + 
         "Timeout to be given in integer seconds");
-        return true;
+        return INVALID;
       }
+
+      // Valid timeout
+      return TIMEOUT;
     }
-    
-    return false;
+
+    // No extra arguments
+    return A;
   }
 
   /*
@@ -124,6 +162,7 @@ public class Client {
     short ANCOUNT = 0;
     short NSCOUNT = 0;
     short ARCOUNT = 0;
+    if (enhancement == PTR) { ARCOUNT = 1; }
 
     dataOutputStream.writeShort(QDCOUNT);
     dataOutputStream.writeShort(ANCOUNT);
@@ -133,15 +172,36 @@ public class Client {
     // Write Question section
     // Write QNAME
     String[] domainParts = domain.split("\\.");
-    for (int i = 0; i < domainParts.length; i++) {
+    // Modification: restructure for PTR
+    if (enhancement == PTR) {
+      // dataOutputStream.writeByte(0x02);
+      for (int i = domainParts.length - 1; i >= 0; i--) {
         byte[] domainBytes = domainParts[i].getBytes(StandardCharsets.UTF_8);
-        dataOutputStream.writeByte(domainBytes.length);
-        dataOutputStream.write(domainBytes);
+        dataOutputStream.writeByte(domainParts[i].length());
+        dataOutputStream.writeBytes(domainParts[i]);
+      }
+      dataOutputStream.writeByte(0x07);
+      dataOutputStream.writeBytes("in-addr");
+      dataOutputStream.writeByte(0x04);
+      dataOutputStream.writeBytes("arpa");
+    } else {
+      for (int i = 0; i < domainParts.length; i++) {
+          byte[] domainBytes = domainParts[i].getBytes(StandardCharsets.UTF_8);
+          dataOutputStream.writeByte(domainBytes.length);
+          dataOutputStream.write(domainBytes);
+      }
     }
+    
     dataOutputStream.writeByte(0); // End of QNAME
 
-    dataOutputStream.writeShort(1); // QTYPES (A = 1)
+    dataOutputStream.writeShort(enhancement); // QTYPES (A = 1)
     dataOutputStream.writeShort(1); // QCLASS
+    if (enhancement == PTR) {
+      dataOutputStream.writeByte(0x00);
+      dataOutputStream.writeByte(0x00);
+      dataOutputStream.writeByte(0x29);
+      dataOutputStream.writeByte(0x10);
+    }
 
     // Create sockets to send/receive via UDP
     byte[] dnsFrame = byteArrayOutputStream.toByteArray();
@@ -216,13 +276,66 @@ public class Client {
     }
     System.out.println();
 
+    
     System.out.println("->>ANSWER SECTION<<-");
     if (res.getAnswer() == false) {
       System.out.println("** Non-authorative answer **");
     } else {
-      for (String answer : res.getA()) {
-        System.out.println("\t" + domain + "\t" + answer);
+      switch(enhancement) {
+        case A:
+          if (res.getA().size() > 0) {
+            for (String answer : res.getA()) {
+            System.out.println("\t" + domain + "\tA\t" + answer);
+            }
+          } else {
+            System.out.println("** Can't find answer for " + domain + " **");
+            // If no A answer exists, print out possible NS and CNAME answers
+            for (String answer : res.getNS()) {
+              System.out.println("\t" + domain + "\tNS\t" + answer);
+            }
+            for (String answer : res.getCNAME()) {
+              System.out.println("\t" + domain + "\tCNAME\t" + answer);
+            }
+          }
+          break;
+        case NS:
+          if (res.getNS().size() > 0) {
+            for (String answer : res.getNS()) {
+            System.out.println("\t" + domain + "\tNS\t" + answer);
+            }
+          } else {
+            System.out.println("** Can't find ns for " + domain + " **");
+          }
+          break;
+        case CNAME:
+          if (res.getCNAME().size() > 0) {
+            for (String answer : res.getCNAME()) {
+            System.out.println("\t" + domain + "\tCNAME\t" + answer);
+            }
+          } else {
+            System.out.println("** Can't find cname for " + domain + " **");
+          }
+          break;
+        case MX:
+          if (res.getMX().size() > 0) {
+            for (String answer : res.getMX()) {
+            System.out.println("\t" + domain + "\tMX\t" + answer);
+            }
+          } else {
+            System.out.println("** Can't find cname for " + domain + " **");
+          }
+          break;
+        case PTR:
+          if (res.getPTR().size() > 0) {
+            for (String answer : res.getPTR()) {
+            System.out.println("\t" + domain + "\tPTR\t" + answer);
+            }
+          } else {
+            System.out.println("** Can't find cname for " + domain + " **");
+          }
+          break;
       }
+
     }
 
     System.out.println();

@@ -4,19 +4,20 @@ import java.io.IOException;
 import java.util.ArrayList;
 
 public class Response {
-  private int id;
-  private String QNAME;
-  private Boolean answer;
-  private Boolean TC;
-  private int RCODE;
-  private int QDCOUNT;
-  private int ANCOUNT;
-  private int NSCOUNT;
-  private int ARCOUNT;
-  private Datagram datagram;
+  private int id = 0;
+  private String QNAME = "";
+  private Boolean answer = false;
+  private Boolean TC = false;
+  private int RCODE = 0;
+  private int QDCOUNT = 0;
+  private int ANCOUNT = 0;
+  private int NSCOUNT = 0;
+  private int ARCOUNT = 0;
+  private Datagram datagram = null;
 
   public Response() {
   }
+
 
   private ArrayList<String> NS = new ArrayList<>();
   private ArrayList<String> A = new ArrayList<>();

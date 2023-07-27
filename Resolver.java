@@ -17,6 +17,10 @@ public class Resolver {
   private static List<String> serversToQuery = new ArrayList<>();
 
   public static void main(String[] args) throws IOException {
+    if (checkArguments(args)) {
+      return;
+    }
+
     rootServers = readRootHintsFile();
 
     Datagram clientDatagram = receiveClientSocket(Integer.parseInt(args[0]));
@@ -26,6 +30,35 @@ public class Resolver {
     Response finalRes = iterativeResolve(clientDatagram);
 
     sendClientSocket(finalRes, clientDatagram);
+  }
+
+  /*
+   * Checks if arguments are valid
+   * Arguments:     String[]    args     string of arguments given to command line
+   * Return:        Boolean              true if invalid
+   */
+  public static Boolean checkArguments(String[] args) {
+    // client resolver_ip resolver_port name timeout
+    if (args.length != 1) {
+      System.out.println("Error: too many/few arguments\n" + 
+      "Usage: resolver port");
+      return true;
+    }
+
+    try {
+      int port = Integer.parseInt(args[0]);
+      if (port < 1024 || port == 8080) {
+        System.out.println("Error: invalid arguments\n" + 
+        "Invalid port number");
+        return true;
+      }
+    } catch (NumberFormatException e) {
+      System.out.println("Error: invalid arguments\n" + 
+        "Invalid port number");
+      return true;
+    }
+
+    return false;
   }
 
   /*  
@@ -89,25 +122,31 @@ public class Resolver {
    * Return:      Response                      class Response holding answers from response
    */
   public static Response iterativeResolve(Datagram clientDatagram) throws IOException {
+    Response response = null;
     while (!serversToQuery.isEmpty()) {
         // Query the next server
         String server = serversToQuery.remove(0);
-        Response response = queryDnsServer(clientDatagram, server);
+        response = queryDnsServer(clientDatagram, server);
 
-        // If A answer was received, return the final answer
-        if (response != null && response.getAnswer() == true) {
-          return response;
-
-        // If NS answer as received, add its IP addresses to 
-        //  serversToQuery list
-        } else if (response != null && response.getA().size() > 0) {
-          // Only add first NS for faster performance
-          serversToQuery.add(response.getA().get(0)); 
+        if (response != null) {
+          // If A answer was received, return the final answer
+          if (response.getAnswer() == true) {
+            return response;
+          // Received format or name error code. Terminate. 
+          } else if (response.getRCODE() == 1 || response.getRCODE() == 3) {
+            return response;
+          // Received name error. Terminate.
+          // If NS answer as received, add its IP addresses to 
+          //  serversToQuery list
+          } else if (response.getA().size() > 0) {
+            // Only add first NS for faster performance
+            serversToQuery.add(response.getA().get(0)); 
+          }
         }
     }
 
-    // Could not resolve the domain
-    return null; 
+    // Could not resolve the domain. Send a fake response
+    return response; 
   }
 
   /*
@@ -177,6 +216,7 @@ public class Resolver {
     
 		// Get previously used client-resolver socket
     DatagramSocket socket = clientDatagram.getDatagramSocket();
+
 
     Datagram sendDatagram = res.getDatagram();
     DatagramPacket sendPacket = new DatagramPacket(sendDatagram.getPacketBytes(), sendDatagram.getPacketBytes().length, addr, port);

@@ -17,11 +17,18 @@ import javax.xml.crypto.Data;
 public class Client {
   private static DatagramSocket clientSocket;
   public static void main(String[] args) throws Exception {
+    if (checkArguments(args)) {
+      return;
+    }
+
     InetAddress IPAddress = InetAddress.getByName(args[0]);
     int serverPort = Integer.parseInt(args[1]);
     String domain = args[2];
+    int timeout = (args.length > 3 ? Integer.parseInt((args[3])) : 5);
+    System.out.println("Timeout is: " + timeout + "ms");
 
     clientSocket = new DatagramSocket();
+    clientSocket.setSoTimeout(timeout);
     try {
       sendQuery(IPAddress, serverPort, domain);
     } catch (IOException e) {
@@ -33,6 +40,46 @@ public class Client {
     finalRes.readResPacket(resolverResDatagram);
 
     printFinal(finalRes, domain);
+  }
+
+  /*
+   * Checks if arguments are valid
+   * Arguments:     String[]    args     string of arguments given to command line
+   * Return:        Boolean              true if invalid
+   */
+  public static Boolean checkArguments(String[] args) {
+    // client resolver_ip resolver_port name timeout
+    if (args.length < 3 || args.length > 4) {
+      System.out.println("Error: too many/few arguments\n" + 
+      "Usage: client resolver_ip resolver_port name timeout");
+      return true;
+    }
+
+    try {
+      int port = Integer.parseInt(args[3]);
+      if (port < 1024 || port == 8080) {
+        System.out.println("Error: invalid arguments\n" + 
+        "Invalid port number");
+        return true;
+      }
+    } catch (NumberFormatException e) {
+      System.out.println("Error: invalid arguments\n" + 
+        "Invalid port number");
+      return true;
+    }
+
+    if (args.length == 4) {
+      try {
+        Integer.parseInt(args[3]);
+      }
+      catch (NumberFormatException e) {
+        System.out.println("Error: invalid arguments\n" + 
+        "Timeout to be given in integer seconds");
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   /*
@@ -77,6 +124,7 @@ public class Client {
     short ANCOUNT = 0;
     short NSCOUNT = 0;
     short ARCOUNT = 0;
+
     dataOutputStream.writeShort(QDCOUNT);
     dataOutputStream.writeShort(ANCOUNT);
     dataOutputStream.writeShort(NSCOUNT);
@@ -84,9 +132,6 @@ public class Client {
 
     // Write Question section
     // Write QNAME
-    // Modification: remove prefix to host name
-    domain = domain.replaceFirst("(http://|https://)", "");
-    domain = domain.replaceFirst("www.", "");
     String[] domainParts = domain.split("\\.");
     for (int i = 0; i < domainParts.length; i++) {
         byte[] domainBytes = domainParts[i].getBytes(StandardCharsets.UTF_8);
@@ -152,14 +197,34 @@ public class Client {
     System.out.println("->>HEADER<<-");
     System.out.println("\tstatus: " + res.getRCODE() + "\tid: " + res.getId());
     System.out.println("\tAuthorative: " + res.getAnswer() + "\tTruncated: " + res.getTC());
-    System.out.println("\tquery: " + res.getQDCOUNT() + "\tANSWER: " + res.getANCOUNT() 
+    System.out.println("\tQuery: " + res.getQDCOUNT() + "\tANSWER: " + res.getANCOUNT() 
       + "\tAUTHORITY: " + res.getNSCOUNT() + "\tADDITIONAL: " + res.getARCOUNT());
+
+    switch(res.getRCODE()) {
+      case 0: 
+        System.out.println("\tError code 0: no errors");
+        break;
+      case 1:
+        System.out.println("\tError code 1: query format error");
+        return;
+      case 2:
+        System.out.println("\tError code 2: server failure");
+        return;
+      case 3:
+        System.out.println("\tError code 3: domain name does not exist");
+        return;
+    }
     System.out.println();
 
     System.out.println("->>ANSWER SECTION<<-");
-    for (String answer : res.getA()) {
-      System.out.println("\t" + domain + "\t" + answer);
+    if (res.getAnswer() == false) {
+      System.out.println("** Non-authorative answer **");
+    } else {
+      for (String answer : res.getA()) {
+        System.out.println("\t" + domain + "\t" + answer);
+      }
     }
+
     System.out.println();
   }
 }

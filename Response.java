@@ -7,6 +7,7 @@ public class Response {
   private int id;
   private String QNAME;
   private Boolean answer;
+  private Boolean TC;
   private int RCODE;
   private int QDCOUNT;
   private int ANCOUNT;
@@ -60,6 +61,10 @@ public class Response {
     this.answer = answer;
   }
 
+  public Boolean getTC() {
+    return this.TC;
+  }
+
   public int getRCODE() {
     return RCODE;
   }
@@ -103,11 +108,12 @@ public class Response {
     this.datagram = datagram;
   }
 
-  public void setResponse(int id, String qNAME, Boolean answer, int RCODE, int qDCOUNT, int aNCOUNT, int nSCOUNT, int aRCOUNT,
+  public void setResponse(int id, String qNAME, int AA, int TC, int RCODE, int qDCOUNT, int aNCOUNT, int nSCOUNT, int aRCOUNT,
     Datagram datagram) {
     this.id = id;
     QNAME = qNAME;
-    this.answer = answer;
+    this.answer = (AA == 1 ? true : false);
+    this.TC = (TC == 1 ? true : false);
     this.RCODE = RCODE;
     QDCOUNT = qDCOUNT;
     ANCOUNT = aNCOUNT;
@@ -167,7 +173,7 @@ public class Response {
 
     // Modification: create a Response class
     Boolean AABool = (AA == 1 ? true : false);
-    setResponse(id, QNAME, AABool, RCODE, QDCOUNT, ANCOUNT, NSCOUNT, ARCOUNT, datagram);
+    setResponse(id, QNAME, AA, TC, RCODE, QDCOUNT, ANCOUNT, NSCOUNT, ARCOUNT, datagram);
 
     // Modification: iterate through all of Answer, Authority and Additional sections
     for (int i = 0; i < NSCOUNT + ANCOUNT + ARCOUNT; i++) {

@@ -151,13 +151,14 @@ public class Client {
 
     System.out.println("->>HEADER<<-");
     System.out.println("\tstatus: " + res.getRCODE() + "\tid: " + res.getId());
+    System.out.println("\tAuthorative: " + res.getAnswer() + "\tTruncated: " + res.getTC());
     System.out.println("\tquery: " + res.getQDCOUNT() + "\tANSWER: " + res.getANCOUNT() 
       + "\tAUTHORITY: " + res.getNSCOUNT() + "\tADDITIONAL: " + res.getARCOUNT());
     System.out.println();
 
     System.out.println("->>ANSWER SECTION<<-");
     for (String answer : res.getA()) {
-      System.out.println(domain + "\t" + answer);
+      System.out.println("\t" + domain + "\t" + answer);
     }
     System.out.println();
   }

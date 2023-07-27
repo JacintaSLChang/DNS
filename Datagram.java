@@ -19,8 +19,7 @@ public class Datagram {
     this.packetBytes = bytes;
 
     DataInputStream dataInputStream = new DataInputStream(new ByteArrayInputStream(this.packetBytes));
-    short Id = dataInputStream.readShort();
-    this.Id = Id;
+    this.Id = dataInputStream.readShort();
   }
 
   public void setDatagramSocket(DatagramSocket socket) {
